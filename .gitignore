@@ -1,1 +1,43 @@
+# =========================
+# REACT / FRONTEND
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.env
+.env.local
+
+# =========================
+# PYTHON / BACKEND
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+*.log
+
+# =========================
+# BASE DE DATOS
+# =========================
+# Ignoramos la BD SQLite para evitar conflictos de git cuando varios compañeros hagan pruebas.
+# Cada quien deberá correr `python seed.py` en su máquina o servidor.
+backend/aldimi.db
+*.sqlite3
+
+# =========================
+# MODELOS DE MACHINE LEARNING
+# =========================
+# NOTA: NO ESTAMOS IGNORANDO la carpeta "modelos/" porque tus archivos .json y .joblib son el corazón del proyecto.
+# Como pesan muy poco, GitHub los aceptará sin problema para el despliegue.
+
+# =========================
+# TEMPORALES / ENTORNO
+# =========================
+scratch/
+artifacts/
 *artifacts
+.vscode/
+.DS_Store
+*.ipynb_checkpoints/
