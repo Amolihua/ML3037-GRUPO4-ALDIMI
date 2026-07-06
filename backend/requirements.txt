@@ -8,3 +8,6 @@ joblib
 prophet
 statsmodels
 python-multipart
+sqlalchemy
+pyjwt
+bcrypt
