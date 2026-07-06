@@ -21,7 +21,7 @@ pip install -r requirements.txt
 python seed.py
 
 # Levanta el servidor del backend
-uvicorn main:app --reload
+python -m uvicorn main:app --reload
 ```
 
 ### 2. Configurar y Levantar el Frontend (React)

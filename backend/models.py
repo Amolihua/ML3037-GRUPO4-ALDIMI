@@ -16,7 +16,9 @@ class Paciente(Base):
     dni = Column(String, primary_key=True, index=True)
     nombre = Column(String, index=True)
     ingreso = Column(Date, default=datetime.date.today)
-    dado_de_alta = Column(Integer, default=0) # 0 = no, 1 = yes
+    dado_de_alta = Column(Integer, default=0) # 0=Activo, 1=Salió, 2=Historial(Dado de Alta)
+    metricas = Column(String, nullable=True) # JSON string
+    motivo_salida = Column(String, nullable=True)
     
     historial = relationship("Historial", back_populates="paciente")
 

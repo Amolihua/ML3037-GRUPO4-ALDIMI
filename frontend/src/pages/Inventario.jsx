@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { PackagePlus, Pill, AlertTriangle } from 'lucide-react';
+import { PackagePlus, Pill, AlertTriangle, ExternalLink } from 'lucide-react';
+
+const INKA_LINKS = {
+    'N02BE': 'https://inkafarma.pe/producto/paracetamol-500mg-tableta/030102',
+    'N05B': 'https://inkafarma.pe/producto/alprazolam-0-5mg-tableta/073190',
+    'M01AB': 'https://inkafarma.pe/producto/diclofenaco-50mg-tabletas-de-liberacion-retardada/016797'
+};
 
 export default function Inventario() {
     const { token } = useContext(AuthContext);
@@ -58,7 +64,12 @@ export default function Inventario() {
             {inventario.map(med => (
                 <div key={med.codigo} style={{ background: 'rgba(255,255,255,0.05)', padding: '2rem', borderRadius: '1rem', marginBottom: '1.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 300px' }}>
-                        <h2 style={{ color: '#3b82f6', marginBottom: '0.5rem' }}>{med.codigo} - {med.nombre}</h2>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <h2 style={{ color: '#3b82f6', marginBottom: '0.5rem' }}>{med.codigo} - {med.nombre}</h2>
+                            <a href={INKA_LINKS[med.codigo]} target="_blank" rel="noreferrer" style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', padding: '0.5rem 1rem', borderRadius: '0.5rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                                <ExternalLink size={16} /> Inkafarma
+                            </a>
+                        </div>
                         <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>Precio Caja: S/ {med.precio_caja.toFixed(2)} (100 und)</p>
                         
                         <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem' }}>

@@ -200,6 +200,45 @@ def predict_single_risk(request: SinglePatientRequest, current_user: Usuario = D
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class PacienteManualRequest(BaseModel):
+    dni: str
+    nombre: str
+    features: Dict[str, Any]
+
+@app.post("/api/pacientes/manual")
+def add_paciente_manual(req: PacienteManualRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    import json
+    try:
+        # Predecir riesgo
+        risk_dict = load_model("modelo_riesgo_pacientes_avanzado.joblib")
+        model = risk_dict['model']
+        le = risk_dict['label_encoder']
+        df = pd.DataFrame([req.features])
+        pred_enc = model.predict(df)[0]
+        riesgo = le.inverse_transform([pred_enc])[0]
+        
+        # Upsert Paciente
+        paciente = db.query(Paciente).filter(Paciente.dni == req.dni).first()
+        if not paciente:
+            paciente = Paciente(dni=req.dni, nombre=req.nombre, ingreso=SimulationState.current_date, dado_de_alta=0)
+            db.add(paciente)
+        else:
+            paciente.nombre = req.nombre
+            paciente.dado_de_alta = 0
+            
+        paciente.metricas = json.dumps(req.features)
+        
+        # Historial
+        hist = Historial(paciente_dni=req.dni, fecha=SimulationState.current_date, riesgo_predicho=riesgo)
+        db.add(hist)
+        
+        db.commit()
+        return {"status": "success", "riesgo_predicho": riesgo}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/upload_census")
 async def upload_census(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     try:
@@ -224,11 +263,14 @@ async def upload_census(file: UploadFile = File(...), db: Session = Depends(get_
         # Guardar en BD si hay identidades
         if identities is not None:
             csv_dnis = set()
+            import json
             for i, row in identities.iterrows():
                 dni = str(row['DNI'])
                 nombre = row['Nombre']
                 riesgo = preds[i]
                 csv_dnis.add(dni)
+                
+                features_dict = df_patients.iloc[i].to_dict()
                 
                 # Update or Create Paciente
                 paciente = db.query(Paciente).filter(Paciente.dni == dni).first()
@@ -239,6 +281,8 @@ async def upload_census(file: UploadFile = File(...), db: Session = Depends(get_
                     # Si estaba inactivo, lo activamos porque volvió a aparecer en el censo
                     if paciente.dado_de_alta == 1:
                         paciente.dado_de_alta = 0
+                        
+                paciente.metricas = json.dumps(features_dict)
                 
                 # Añadir Historial
                 hist = Historial(paciente_dni=dni, fecha=SimulationState.current_date, riesgo_predicho=riesgo)
@@ -272,9 +316,10 @@ async def upload_census(file: UploadFile = File(...), db: Session = Depends(get_
 
 @app.get("/api/pacientes")
 def get_pacientes(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    pacientes = db.query(Paciente).all()
-    # Fetch latest history for each
+    # Solo pacientes activos o "salieron" (0 o 1)
+    pacientes = db.query(Paciente).filter(Paciente.dado_de_alta <= 1).all()
     result = []
+    import json
     for p in pacientes:
         h = db.query(Historial).filter(Historial.paciente_dni == p.dni).order_by(Historial.fecha.desc()).first()
         result.append({
@@ -282,7 +327,8 @@ def get_pacientes(db: Session = Depends(get_db), current_user: Usuario = Depends
             "nombre": p.nombre,
             "ingreso": p.ingreso,
             "dado_de_alta": p.dado_de_alta,
-            "riesgo_actual": h.riesgo_predicho if h else "Unknown"
+            "riesgo_actual": h.riesgo_predicho if h else "Unknown",
+            "metricas": json.loads(p.metricas) if p.metricas else None
         })
     return result
 
@@ -295,22 +341,44 @@ def dar_alta(dni: str, db: Session = Depends(get_db), current_user: Usuario = De
     db.commit()
     return {"status": "success", "dado_de_alta": paciente.dado_de_alta}
 
-class DeleteRequest(BaseModel):
+class FinalizarRequest(BaseModel):
     motivo: str
 
-@app.delete("/api/pacientes/{dni}")
-def delete_paciente(dni: str, req: DeleteRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+@app.put("/api/pacientes/{dni}/finalizar")
+def finalizar_paciente(dni: str, req: FinalizarRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     paciente = db.query(Paciente).filter(Paciente.dni == dni).first()
     if not paciente:
         raise HTTPException(status_code=404, detail="Paciente not found")
     
-    # Borrar historial en cascada manualmente para sqlite
-    db.query(Historial).filter(Historial.paciente_dni == dni).delete()
-    db.delete(paciente)
+    # Soft delete (mover a historial)
+    paciente.dado_de_alta = 2
+    paciente.motivo_salida = req.motivo
     db.commit()
     
-    print(f"Paciente {dni} eliminado. Motivo: {req.motivo}")
     return {"status": "success", "motivo": req.motivo}
+
+@app.get("/api/pacientes/historial")
+def get_historial(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    pacientes = db.query(Paciente).filter(Paciente.dado_de_alta == 2).all()
+    result = []
+    import json
+    for p in pacientes:
+        h = db.query(Historial).filter(Historial.paciente_dni == p.dni).order_by(Historial.fecha.desc()).first()
+        result.append({
+            "dni": p.dni,
+            "nombre": p.nombre,
+            "ingreso": p.ingreso,
+            "riesgo_ultimo": h.riesgo_predicho if h else "Unknown",
+            "motivo_salida": p.motivo_salida
+        })
+    return result
+
+@app.get("/api/pacientes/historial/stats")
+def get_historial_stats(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    from sqlalchemy import func
+    stats = db.query(Paciente.motivo_salida, func.count(Paciente.dni)).filter(Paciente.dado_de_alta == 2).group_by(Paciente.motivo_salida).all()
+    result = [{"motivo": s[0], "cantidad": s[1]} for s in stats]
+    return result
 
 # --- INVENTORY ENDPOINTS ---
 @app.get("/api/inventario")
