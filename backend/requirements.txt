@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+scikit-learn
+xgboost
+pandas
+numpy
+joblib
+prophet
+statsmodels
+python-multipart
+sqlalchemy
+pyjwt
+bcrypt
